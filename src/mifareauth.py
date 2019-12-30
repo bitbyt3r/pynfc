@@ -17,6 +17,7 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+import keyboard
 import time
 import logging
 import binascii
@@ -205,13 +206,16 @@ class NFCReader(object):
     def read_card(self, uid):
         """Takes a uid, reads the card and return data for use in writing the card"""
         key = "\xff\xff\xff\xff\xff\xff"
-        print("Reading card", binascii.hexlify(uid))
-        self._card_uid = self.select_card()
-        self._authenticate(0x00, uid, key)
-        block = 0
-        for block in range(64):
-            data = self.auth_and_read(block, uid, key)
-            print(block, "".join(["{:02x}".format(i) for i in data]))
+        cardid = binascii.hexlify(uid)
+        print("Reading card", cardid)
+        keyboard.write(cardid.decode('utf-8'))
+        keyboard.press_and_release('enter')
+        #self._card_uid = self.select_card()
+        #self._authenticate(0x00, uid, key)
+        #block = 0
+        #for block in range(64):
+        #    data = self.auth_and_read(block, uid, key)
+        #    print(block, "".join(["{:02x}".format(i) for i in data]))
 
     def write_card(self, uid, data):
         """Accepts data of the recently read card with UID uid, and writes any changes necessary to it"""
