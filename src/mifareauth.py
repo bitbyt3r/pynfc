@@ -19,13 +19,10 @@
 
 import time
 import logging
+import binascii
 import ctypes
 import string
 import nfc
-
-def hex_dump(string):
-    """Dumps data as hexstrings"""
-    return ' '.join(["%0.2X" % ord(x) for x in string])
 
 ### NFC device setup
 class NFCReader(object):
@@ -74,7 +71,7 @@ class NFCReader(object):
                 time.sleep(5)
         except (KeyboardInterrupt, SystemExit):
             loop = False
-        except IOError, e:
+        except IOError as e:
             self.log("Exception: " + str(e))
             loop = True  # not str(e).startswith("NFC Error whilst polling")
         # except Exception, e:
@@ -84,16 +81,6 @@ class NFCReader(object):
             nfc.nfc_exit(self.__context)
             self.log("NFC Clean shutdown called")
         return loop
-
-    @staticmethod
-    def _sanitize(bytesin):
-        """Returns guaranteed ascii text from the input bytes"""
-        return "".join([x if 0x7f > ord(x) > 0x1f else '.' for x in bytesin])
-
-    @staticmethod
-    def _hashsanitize(bytesin):
-        """Returns guaranteed hexadecimal digits from the input bytes"""
-        return "".join([x if x.lower() in 'abcdef0123456789' else '' for x in bytesin])
 
     def _poll_loop(self):
         """Starts a loop that constantly polls for cards"""
@@ -106,7 +93,7 @@ class NFCReader(object):
         elif res >= 1:
             uid = None
             if nt.nti.nai.szUidLen == 4:
-                uid = "".join([chr(nt.nti.nai.abtUid[i]) for i in range(4)])
+                uid = bytes([nt.nti.nai.abtUid[i] for i in range(4)])
             if uid:
                 if not ((self._card_uid and self._card_present and uid == self._card_uid) and \
                                     time.mktime(time.gmtime()) <= self._card_last_seen + self.card_timeout):
@@ -158,7 +145,7 @@ class NFCReader(object):
                                                  ctypes.pointer(abtrx), len(abtrx), 0)
         if res < 0:
             raise IOError("Error reading data")
-        return "".join([chr(abtrx[i]) for i in range(res)])
+        return bytes([abtrx[i] for i in range(res)])
 
     def __write_block(self, block, data):
         """Writes a block of data to a Mifare Card after authentication
@@ -188,7 +175,7 @@ class NFCReader(object):
         for i in range(6):
             abttx[i + 2] = ord(key[i])
         for i in range(4):
-            abttx[i + 8] = ord(uid[i])
+            abttx[i + 8] = uid[i]
         abtrx = (ctypes.c_uint8 * 250)()
         return nfc.nfc_initiator_transceive_bytes(self.__device, ctypes.pointer(abttx), len(abttx),
                                                   ctypes.pointer(abtrx), len(abtrx), 0)
@@ -203,7 +190,7 @@ class NFCReader(object):
         res = self._authenticate(block, uid, key)
         if res >= 0:
             return self._read_block(block)
-        return ''
+        return bytes()
 
     def auth_and_write(self, block, uid, data, key = "\xff\xff\xff\xff\xff\xff"):
         """Authenticates and then writes a block
@@ -218,13 +205,13 @@ class NFCReader(object):
     def read_card(self, uid):
         """Takes a uid, reads the card and return data for use in writing the card"""
         key = "\xff\xff\xff\xff\xff\xff"
-        print "Reading card", uid.encode("hex")
+        print("Reading card", binascii.hexlify(uid))
         self._card_uid = self.select_card()
         self._authenticate(0x00, uid, key)
         block = 0
         for block in range(64):
             data = self.auth_and_read(block, uid, key)
-            print block, data.encode("hex"), "".join([ x if x in string.printable else "." for x in data])
+            print(block, "".join(["{:02x}".format(i) for i in data]))
 
     def write_card(self, uid, data):
         """Accepts data of the recently read card with UID uid, and writes any changes necessary to it"""
